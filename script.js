@@ -124,7 +124,8 @@ function hideConfigError() {
 // GRID GENERATION
 // ═══════════════════════════════════════════════════
 function buildGrid() {
-  return { rows: STATE.selectedNumbers, cols: STATE.selectedNumbers };
+  const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  return { rows: all, cols: all };
 }
 
 function getCellValue(r, c) { return r * c; }
@@ -134,13 +135,22 @@ function getCellValue(r, c) { return r * c; }
 // ═══════════════════════════════════════════════════
 function selectHiddenCells(grid) {
   const { rows, cols } = grid;
-  const allCells = [];
-  rows.forEach((r, ri) => cols.forEach((c, ci) => allCells.push({ rowIdx: ri, colIdx: ci, answer: getCellValue(r, c) })));
+  const selected = new Set(STATE.selectedNumbers);
 
   if (STATE.difficulty === 'division') {
-    selectDivisionSetup(grid);
+    selectDivisionSetup(grid, selected);
     return;
   }
+
+  // Only cells where both row and column are in the selected set are eligible
+  const allCells = [];
+  rows.forEach((r, ri) => {
+    if (!selected.has(r)) return;
+    cols.forEach((c, ci) => {
+      if (!selected.has(c)) return;
+      allCells.push({ rowIdx: ri, colIdx: ci, answer: getCellValue(r, c) });
+    });
+  });
 
   let count;
   if (STATE.difficulty === 'easy')        count = 1;
@@ -156,12 +166,16 @@ function selectHiddenCells(grid) {
   STATE.divisionClueRowIdx = null;
 }
 
-function selectDivisionSetup(grid) {
+function selectDivisionSetup(grid, selected) {
   const { rows, cols } = grid;
-  const clueRowIdx = randInt(0, rows.length - 1);
+  // Clue row must be from a selected number
+  const eligibleRowIdxs = rows.map((r, ri) => ri).filter(ri => selected.has(rows[ri]));
+  const clueRowIdx = eligibleRowIdxs[randInt(0, eligibleRowIdxs.length - 1)];
   STATE.divisionClueRowIdx = clueRowIdx;
-  // Hidden "cells" are the column headers — represented with rowIdx = -1
-  STATE.hiddenCells = cols.map((c, ci) => ({ rowIdx: -1, colIdx: ci, answer: c }));
+  // Only hide column headers for selected numbers — others stay visible
+  STATE.hiddenCells = cols
+    .map((c, ci) => ({ rowIdx: -1, colIdx: ci, answer: c }))
+    .filter(cell => selected.has(cols[cell.colIdx]));
   STATE.lastHiddenKeys = new Set();
 }
 
@@ -182,6 +196,9 @@ function renderGrid() {
 
 function renderTableHeader(table, grid) {
   const isDivision = STATE.difficulty === 'division';
+  const hiddenColIdxs = isDivision
+    ? new Set(STATE.hiddenCells.filter(h => h.rowIdx === -1).map(h => h.colIdx))
+    : new Set();
   const thead = table.createTHead();
   const tr = thead.insertRow();
 
@@ -192,7 +209,7 @@ function renderTableHeader(table, grid) {
 
   grid.cols.forEach((c, ci) => {
     const th = document.createElement('th');
-    if (isDivision) {
+    if (isDivision && hiddenColIdxs.has(ci)) {
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'cell-input';
