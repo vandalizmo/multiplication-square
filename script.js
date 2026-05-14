@@ -10,9 +10,10 @@ const STATE = {
 
   screen: 'config',
   round: 0,
-  roundMode: 'multiplication',   // mode chosen for the current round
-  hiddenCells: [],               // [{rowIdx, colIdx, answer}]
+  roundMode: 'multiplication',      // mode chosen for the current round
+  hiddenCells: [],                  // [{rowIdx, colIdx, answer}]
   divisionClueRowIdx: null,
+  divisionAskedColIdxs: new Set(),  // column indices whose header is an input in division mode
 
   tasksCompleted: 0,
   tasksAttempted: 0,
@@ -170,7 +171,7 @@ function selectHiddenCells(grid) {
   let count;
   if (STATE.difficulty === 'easy')        count = 1;
   else if (STATE.difficulty === 'medium') count = Math.min(randInt(3, 5), allCells.length);
-  else                                    count = Math.max(1, Math.floor(allCells.length / 2));
+  else                                    count = 1; // hard: 1 input, all other cells blank
 
   const preferred = allCells.filter(c => !STATE.lastHiddenKeys.has(`${c.rowIdx},${c.colIdx}`));
   const pool = preferred.length >= count ? preferred : allCells;
@@ -183,14 +184,23 @@ function selectHiddenCells(grid) {
 
 function selectDivisionSetup(grid, selected) {
   const { rows, cols } = grid;
-  // Clue row must be from a selected number
+
   const eligibleRowIdxs = rows.map((r, ri) => ri).filter(ri => selected.has(rows[ri]));
-  const clueRowIdx = eligibleRowIdxs[randInt(0, eligibleRowIdxs.length - 1)];
-  STATE.divisionClueRowIdx = clueRowIdx;
-  // Only hide column headers for selected numbers — others stay visible
-  STATE.hiddenCells = cols
-    .map((c, ci) => ({ rowIdx: -1, colIdx: ci, answer: c }))
-    .filter(cell => selected.has(cols[cell.colIdx]));
+  STATE.divisionClueRowIdx = eligibleRowIdxs[randInt(0, eligibleRowIdxs.length - 1)];
+
+  // Number of questions depends on difficulty
+  const eligibleColIdxs = cols.map((c, ci) => ci).filter(ci => selected.has(cols[ci]));
+  let askedColIdxs;
+  if (STATE.difficulty === 'easy') {
+    askedColIdxs = eligibleColIdxs;
+  } else if (STATE.difficulty === 'medium') {
+    askedColIdxs = shuffle(eligibleColIdxs).slice(0, Math.min(randInt(3, 5), eligibleColIdxs.length));
+  } else {
+    askedColIdxs = shuffle(eligibleColIdxs).slice(0, 1);
+  }
+
+  STATE.divisionAskedColIdxs = new Set(askedColIdxs);
+  STATE.hiddenCells = askedColIdxs.map(ci => ({ rowIdx: -1, colIdx: ci, answer: cols[ci] }));
   STATE.lastHiddenKeys = new Set();
 }
 
@@ -211,20 +221,19 @@ function renderGrid() {
 
 function renderTableHeader(table, grid) {
   const isDivision = STATE.roundMode === 'division';
-  const hiddenColIdxs = isDivision
-    ? new Set(STATE.hiddenCells.filter(h => h.rowIdx === -1).map(h => h.colIdx))
-    : new Set();
+  const isHardDivision = isDivision && STATE.difficulty === 'hard';
+  const askedColIdxs = STATE.divisionAskedColIdxs; // Set
   const thead = table.createTHead();
   const tr = thead.insertRow();
 
-  // Corner cell
   const corner = document.createElement('th');
   corner.textContent = isDivision ? '÷' : '×';
   tr.appendChild(corner);
 
   grid.cols.forEach((c, ci) => {
     const th = document.createElement('th');
-    if (isDivision && hiddenColIdxs.has(ci)) {
+    if (isDivision && askedColIdxs.has(ci)) {
+      // Asked column: render as input
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'cell-input';
@@ -232,9 +241,11 @@ function renderTableHeader(table, grid) {
       input.dataset.headerCol = ci;
       input.setAttribute('aria-label', `Column header ${ci + 1}`);
       th.appendChild(input);
-    } else {
+    } else if (!isDivision || !isHardDivision) {
+      // Multiplication (all), or easy/medium division: show number
       th.textContent = c;
     }
+    // Hard division non-asked columns: blank (nothing appended)
     tr.appendChild(th);
   });
 }
@@ -242,6 +253,7 @@ function renderTableHeader(table, grid) {
 function renderTableBody(table, grid) {
   const { rows, cols } = grid;
   const isDivision = STATE.roundMode === 'division';
+  const isHard = STATE.difficulty === 'hard';
   const hiddenSet = new Set(STATE.hiddenCells.map(h => `${h.rowIdx},${h.colIdx}`));
   const tbody = table.createTBody();
 
@@ -250,7 +262,6 @@ function renderTableBody(table, grid) {
     const isClue = isDivision && ri === STATE.divisionClueRowIdx;
     if (isClue) tr.classList.add('clue-row');
 
-    // Row header
     const th = document.createElement('th');
     th.textContent = r;
     if (isClue) th.classList.add('clue-row-label');
@@ -260,17 +271,22 @@ function renderTableBody(table, grid) {
       const td = tr.insertCell();
       const val = getCellValue(r, c);
 
-      if (!isDivision && hiddenSet.has(`${ri},${ci}`)) {
-        const input = createCellInput(val, ri, ci, r, c);
-        td.appendChild(input);
-      } else {
+      if (isDivision) {
+        // Show product only for clue row cells that are being asked; everything else blank
+        if (isClue && STATE.divisionAskedColIdxs.has(ci)) {
+          const span = document.createElement('span');
+          span.textContent = val;
+          td.appendChild(span);
+        }
+      } else if (hiddenSet.has(`${ri},${ci}`)) {
+        td.appendChild(createCellInput(val, ri, ci, r, c));
+      } else if (!isHard) {
+        // Easy / medium multiplication: show the product
         const span = document.createElement('span');
         span.textContent = val;
-        if (isDivision && !isClue) {
-          td.classList.add('cell-dim');
-        }
         td.appendChild(span);
       }
+      // Hard multiplication non-input cells: blank (nothing appended)
     });
   });
 }

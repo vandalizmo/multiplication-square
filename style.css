@@ -337,8 +337,6 @@ body {
 .clue-row td, .clue-row th { background: var(--clue-row) !important; font-weight: 700; }
 .clue-row-label { background: #FFE082 !important; }
 
-/* Dimmed cells in division mode */
-.cell-dim { opacity: 0.35; }
 
 /* Answer reveal */
 .cell-revealed-text {
