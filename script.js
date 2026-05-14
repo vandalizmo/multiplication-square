@@ -168,10 +168,7 @@ function selectHiddenCells(grid) {
     });
   });
 
-  let count;
-  if (STATE.difficulty === 'easy')        count = 1;
-  else if (STATE.difficulty === 'medium') count = Math.min(randInt(3, 5), allCells.length);
-  else                                    count = 1; // hard: 1 input, all other cells blank
+  const count = 1;
 
   const preferred = allCells.filter(c => !STATE.lastHiddenKeys.has(`${c.rowIdx},${c.colIdx}`));
   const pool = preferred.length >= count ? preferred : allCells;
@@ -188,16 +185,8 @@ function selectDivisionSetup(grid, selected) {
   const eligibleRowIdxs = rows.map((r, ri) => ri).filter(ri => selected.has(rows[ri]));
   STATE.divisionClueRowIdx = eligibleRowIdxs[randInt(0, eligibleRowIdxs.length - 1)];
 
-  // Number of questions depends on difficulty
   const eligibleColIdxs = cols.map((c, ci) => ci).filter(ci => selected.has(cols[ci]));
-  let askedColIdxs;
-  if (STATE.difficulty === 'easy') {
-    askedColIdxs = eligibleColIdxs;
-  } else if (STATE.difficulty === 'medium') {
-    askedColIdxs = shuffle(eligibleColIdxs).slice(0, Math.min(randInt(3, 5), eligibleColIdxs.length));
-  } else {
-    askedColIdxs = shuffle(eligibleColIdxs).slice(0, 1);
-  }
+  const askedColIdxs = shuffle(eligibleColIdxs).slice(0, 1);
 
   STATE.divisionAskedColIdxs = new Set(askedColIdxs);
   STATE.hiddenCells = askedColIdxs.map(ci => ({ rowIdx: -1, colIdx: ci, answer: cols[ci] }));
@@ -216,7 +205,36 @@ function renderGrid() {
 
   renderTableHeader(table, grid);
   renderTableBody(table, grid);
+  renderQuestionArea(grid);
   focusFirstInput();
+}
+
+function renderQuestionArea(grid) {
+  const el = document.getElementById('question-area');
+  el.innerHTML = '';
+
+  let equations;
+
+  if (STATE.roundMode === 'division') {
+    const rowNum = grid.rows[STATE.divisionClueRowIdx];
+    equations = [...STATE.divisionAskedColIdxs].map(ci => {
+      const product = getCellValue(rowNum, grid.cols[ci]);
+      return `${product} ÷ ${rowNum} = ?`;
+    });
+  } else {
+    equations = STATE.hiddenCells.map(cell => {
+      const rowNum = grid.rows[cell.rowIdx];
+      const colNum = grid.cols[cell.colIdx];
+      return `${rowNum} × ${colNum} = ?`;
+    });
+  }
+
+  equations.forEach(text => {
+    const span = document.createElement('span');
+    span.className = 'equation';
+    span.textContent = text;
+    el.appendChild(span);
+  });
 }
 
 function renderTableHeader(table, grid) {
