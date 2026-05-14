@@ -123,6 +123,30 @@ body {
   gap: 0.5rem;
 }
 
+/* Operation mode toggles */
+#mode-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.6rem 0.5rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mode-btn.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
 /* Difficulty buttons */
 #difficulty-buttons {
   display: flex;

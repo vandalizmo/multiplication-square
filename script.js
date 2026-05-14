@@ -4,12 +4,14 @@
 const STATE = {
   selectedNumbers: [],
   difficulty: 'easy',
+  modes: ['multiplication', 'division'], // active operation modes
   goalType: 'tasks',
   goalValue: 10,
 
   screen: 'config',
   round: 0,
-  hiddenCells: [],        // [{rowIdx, colIdx, answer}]
+  roundMode: 'multiplication',   // mode chosen for the current round
+  hiddenCells: [],               // [{rowIdx, colIdx, answer}]
   divisionClueRowIdx: null,
 
   tasksCompleted: 0,
@@ -96,15 +98,25 @@ function getSelectedDifficulty() {
   return document.querySelector('.diff-btn.selected')?.dataset.diff || 'easy';
 }
 
+function getSelectedModes() {
+  return [...document.querySelectorAll('.mode-btn.selected')].map(b => b.dataset.mode);
+}
+
 function readConfig() {
   const nums = getCheckedNumbers();
   if (nums.length < 2) {
     showConfigError('Please select at least 2 numbers.');
     return false;
   }
+  const modes = getSelectedModes();
+  if (modes.length === 0) {
+    showConfigError('Please select at least one operation (Multiplication or Division).');
+    return false;
+  }
   hideConfigError();
   STATE.selectedNumbers = nums;
   STATE.difficulty = getSelectedDifficulty();
+  STATE.modes = modes;
   STATE.goalType = document.querySelector('input[name="goal-type"]:checked').value;
   STATE.goalValue = Math.max(1, parseInt(document.getElementById('goal-value').value) || 10);
   return true;
@@ -137,12 +149,15 @@ function selectHiddenCells(grid) {
   const { rows, cols } = grid;
   const selected = new Set(STATE.selectedNumbers);
 
-  if (STATE.difficulty === 'division') {
+  // Pick mode for this round
+  STATE.roundMode = STATE.modes[Math.floor(Math.random() * STATE.modes.length)];
+
+  if (STATE.roundMode === 'division') {
     selectDivisionSetup(grid, selected);
     return;
   }
 
-  // Only cells where both row and column are in the selected set are eligible
+  // Multiplication: only cells where both row and column are in the selected set
   const allCells = [];
   rows.forEach((r, ri) => {
     if (!selected.has(r)) return;
@@ -195,7 +210,7 @@ function renderGrid() {
 }
 
 function renderTableHeader(table, grid) {
-  const isDivision = STATE.difficulty === 'division';
+  const isDivision = STATE.roundMode === 'division';
   const hiddenColIdxs = isDivision
     ? new Set(STATE.hiddenCells.filter(h => h.rowIdx === -1).map(h => h.colIdx))
     : new Set();
@@ -226,7 +241,7 @@ function renderTableHeader(table, grid) {
 
 function renderTableBody(table, grid) {
   const { rows, cols } = grid;
-  const isDivision = STATE.difficulty === 'division';
+  const isDivision = STATE.roundMode === 'division';
   const hiddenSet = new Set(STATE.hiddenCells.map(h => `${h.rowIdx},${h.colIdx}`));
   const tbody = table.createTBody();
 
@@ -432,6 +447,17 @@ function initEvents() {
   // Config
   document.getElementById('btn-select-all').addEventListener('click', () => setAllCheckboxes(true));
   document.getElementById('btn-clear-all').addEventListener('click', () => setAllCheckboxes(false));
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const alreadySelected = btn.classList.contains('selected');
+      const otherSelected = [...document.querySelectorAll('.mode-btn')]
+        .some(b => b !== btn && b.classList.contains('selected'));
+      // Prevent deselecting the last active toggle
+      if (alreadySelected && !otherSelected) return;
+      btn.classList.toggle('selected');
+    });
+  });
 
   document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
