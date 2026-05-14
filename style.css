@@ -329,6 +329,16 @@ body {
 
 #multiplication-grid td { background: var(--cell-bg); }
 
+/* Diagonal cells — bold */
+#multiplication-grid td.cell-diagonal { font-weight: 700; }
+
+/* Active row / column tint */
+#multiplication-grid td.highlight-row,
+#multiplication-grid td.highlight-col { background-color: #efefef; }
+
+/* Active column header tint */
+#multiplication-grid thead th.highlight-col { filter: brightness(0.9); }
+
 /* Hidden input cells */
 .cell-input {
   width: 2.6rem;

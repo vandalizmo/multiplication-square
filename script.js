@@ -14,6 +14,8 @@ const STATE = {
   hiddenCells: [],                  // [{rowIdx, colIdx, answer}]
   divisionClueRowIdx: null,
   divisionAskedColIdxs: new Set(),  // column indices whose header is an input in division mode
+  highlightRowIdx: null,            // row index of the current question (for background tint)
+  highlightColIdx: null,            // col index of the current question (for background tint)
 
   tasksCompleted: 0,
   tasksAttempted: 0,
@@ -177,6 +179,8 @@ function selectHiddenCells(grid) {
   STATE.hiddenCells = chosen;
   STATE.lastHiddenKeys = new Set(chosen.map(c => `${c.rowIdx},${c.colIdx}`));
   STATE.divisionClueRowIdx = null;
+  STATE.highlightRowIdx = chosen[0].rowIdx;
+  STATE.highlightColIdx = chosen[0].colIdx;
 }
 
 function selectDivisionSetup(grid, selected) {
@@ -191,6 +195,8 @@ function selectDivisionSetup(grid, selected) {
   STATE.divisionAskedColIdxs = new Set(askedColIdxs);
   STATE.hiddenCells = askedColIdxs.map(ci => ({ rowIdx: -1, colIdx: ci, answer: cols[ci] }));
   STATE.lastHiddenKeys = new Set();
+  STATE.highlightRowIdx = STATE.divisionClueRowIdx;
+  STATE.highlightColIdx = askedColIdxs[0];
 }
 
 // ═══════════════════════════════════════════════════
@@ -250,6 +256,7 @@ function renderTableHeader(table, grid) {
 
   grid.cols.forEach((c, ci) => {
     const th = document.createElement('th');
+    if (ci === STATE.highlightColIdx) th.classList.add('highlight-col');
     if (isDivision && askedColIdxs.has(ci)) {
       // Asked column: render as input
       const input = document.createElement('input');
@@ -287,6 +294,9 @@ function renderTableBody(table, grid) {
 
     cols.forEach((c, ci) => {
       const td = tr.insertCell();
+      if (ri === STATE.highlightRowIdx) td.classList.add('highlight-row');
+      if (ci === STATE.highlightColIdx) td.classList.add('highlight-col');
+      if (ri === ci) td.classList.add('cell-diagonal');
       const val = getCellValue(r, c);
 
       if (isDivision) {
