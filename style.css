@@ -332,12 +332,26 @@ body {
 /* Diagonal cells — bold */
 #multiplication-grid td.cell-diagonal { font-weight: 700; }
 
-/* Active row / column tint */
+/* Active row / column — light gray tint on body cells */
 #multiplication-grid td.highlight-row,
 #multiplication-grid td.highlight-col { background-color: #efefef; }
 
-/* Active column header tint */
-#multiplication-grid thead th.highlight-col { filter: brightness(0.9); }
+/* Intersection cell — orange */
+#multiplication-grid td.highlight-row.highlight-col {
+  background-color: var(--primary);
+}
+
+/* Active row header — orange */
+#multiplication-grid tbody th.highlight-row-header {
+  background-color: var(--primary) !important;
+  color: white;
+}
+
+/* Active column header — orange */
+#multiplication-grid thead th.highlight-col {
+  background-color: var(--primary) !important;
+  color: white;
+}
 
 /* Hidden input cells */
 .cell-input {
@@ -366,9 +380,8 @@ body {
   background: #FFF3E0;
 }
 
-/* Clue row in division mode */
-.clue-row td, .clue-row th { background: var(--clue-row) !important; font-weight: 700; }
-.clue-row-label { background: #FFE082 !important; }
+/* Clue row in division mode — bold only, no background (highlight system handles colour) */
+.clue-row td, .clue-row th { font-weight: 700; }
 
 
 /* Answer reveal */

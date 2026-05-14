@@ -289,7 +289,7 @@ function renderTableBody(table, grid) {
 
     const th = document.createElement('th');
     th.textContent = r;
-    if (isClue) th.classList.add('clue-row-label');
+    if (ri === STATE.highlightRowIdx) th.classList.add('highlight-row-header');
     tr.appendChild(th);
 
     cols.forEach((c, ci) => {
