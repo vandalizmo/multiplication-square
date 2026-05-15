@@ -198,7 +198,13 @@ body {
   text-align: center;
 }
 
-#goal-unit {
+#goal-time-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.goal-unit-label {
   color: var(--muted);
   font-weight: 500;
 }

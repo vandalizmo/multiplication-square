@@ -42,13 +42,15 @@
     <h2>Goal</h2>
     <div id="goal-config">
       <label class="goal-radio-label">
-        <input type="radio" name="goal-type" value="tasks" checked> Tasks
+        <input type="radio" name="goal-type" value="all" checked> All combinations
       </label>
       <label class="goal-radio-label">
-        <input type="radio" name="goal-type" value="time"> Time
+        <input type="radio" name="goal-type" value="time"> Time limit
       </label>
-      <input type="number" id="goal-value" min="1" max="999" value="10">
-      <span id="goal-unit">tasks</span>
+      <div id="goal-time-input" class="hidden">
+        <input type="number" id="goal-value" min="1" max="60" value="5">
+        <span class="goal-unit-label">minutes</span>
+      </div>
     </div>
   </div>
 

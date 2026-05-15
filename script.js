@@ -2,28 +2,33 @@
 // STATE
 // ═══════════════════════════════════════════════════
 const STATE = {
+  // Config
   selectedNumbers: [],
   difficulty: 'easy',
-  modes: ['multiplication', 'division'], // active operation modes
-  goalType: 'tasks',
-  goalValue: 10,
+  modes: ['multiplication', 'division'],
+  goalType: 'all',   // 'all' | 'time'
+  goalValue: 5,      // minutes (only used for time goal)
 
+  // Session
   screen: 'config',
   round: 0,
-  roundMode: 'multiplication',      // mode chosen for the current round
-  hiddenCells: [],                  // [{rowIdx, colIdx, answer}]
+  roundMode: 'multiplication',
+  hiddenCells: [],
   divisionClueRowIdx: null,
-  divisionAskedColIdxs: new Set(),  // column indices whose header is an input in division mode
-  highlightRowIdx: null,            // row index of the current question (for background tint)
-  highlightColIdx: null,            // col index of the current question (for background tint)
+  divisionAskedColIdxs: new Set(),
+  highlightRowIdx: null,
+  highlightColIdx: null,
 
+  // Combination tracking
+  totalCombinations: 0,
+  completedCombinations: new Set(), // keys: "mode:rowNum:colNum"
+
+  // Progress
   tasksCompleted: 0,
   tasksAttempted: 0,
   timerSeconds: 0,
   timerInterval: null,
   startTime: null,
-
-  lastHiddenKeys: new Set(),
 };
 
 // ═══════════════════════════════════════════════════
@@ -121,7 +126,7 @@ function readConfig() {
   STATE.difficulty = getSelectedDifficulty();
   STATE.modes = modes;
   STATE.goalType = document.querySelector('input[name="goal-type"]:checked').value;
-  STATE.goalValue = Math.max(1, parseInt(document.getElementById('goal-value').value) || 10);
+  STATE.goalValue = Math.max(1, parseInt(document.getElementById('goal-value').value) || 5);
   return true;
 }
 
@@ -152,51 +157,41 @@ function selectHiddenCells(grid) {
   const { rows, cols } = grid;
   const selected = new Set(STATE.selectedNumbers);
 
-  // Pick mode for this round
-  STATE.roundMode = STATE.modes[Math.floor(Math.random() * STATE.modes.length)];
-
-  if (STATE.roundMode === 'division') {
-    selectDivisionSetup(grid, selected);
-    return;
-  }
-
-  // Multiplication: only cells where both row and column are in the selected set
-  const allCells = [];
-  rows.forEach((r, ri) => {
-    if (!selected.has(r)) return;
-    cols.forEach((c, ci) => {
-      if (!selected.has(c)) return;
-      allCells.push({ rowIdx: ri, colIdx: ci, answer: getCellValue(r, c) });
+  // Build the pool of uncompleted (mode, row, col) combinations
+  const pool = [];
+  STATE.modes.forEach(mode => {
+    rows.forEach((r, ri) => {
+      if (!selected.has(r)) return;
+      cols.forEach((c, ci) => {
+        if (!selected.has(c)) return;
+        if (!STATE.completedCombinations.has(`${mode}:${r}:${c}`)) {
+          pool.push({ mode, ri, ci, r, c });
+        }
+      });
     });
   });
 
-  const count = 1;
+  // All combinations done — end game (goalType 'all') or reset pool (time mode)
+  if (pool.length === 0) {
+    if (STATE.goalType === 'all') { endGame(); return; }
+    STATE.completedCombinations.clear();
+    return selectHiddenCells(grid);
+  }
 
-  const preferred = allCells.filter(c => !STATE.lastHiddenKeys.has(`${c.rowIdx},${c.colIdx}`));
-  const pool = preferred.length >= count ? preferred : allCells;
-  const chosen = shuffle(pool).slice(0, count);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  STATE.roundMode = pick.mode;
+  STATE.highlightRowIdx = pick.ri;
+  STATE.highlightColIdx = pick.ci;
 
-  STATE.hiddenCells = chosen;
-  STATE.lastHiddenKeys = new Set(chosen.map(c => `${c.rowIdx},${c.colIdx}`));
-  STATE.divisionClueRowIdx = null;
-  STATE.highlightRowIdx = chosen[0].rowIdx;
-  STATE.highlightColIdx = chosen[0].colIdx;
-}
-
-function selectDivisionSetup(grid, selected) {
-  const { rows, cols } = grid;
-
-  const eligibleRowIdxs = rows.map((r, ri) => ri).filter(ri => selected.has(rows[ri]));
-  STATE.divisionClueRowIdx = eligibleRowIdxs[randInt(0, eligibleRowIdxs.length - 1)];
-
-  const eligibleColIdxs = cols.map((c, ci) => ci).filter(ci => selected.has(cols[ci]));
-  const askedColIdxs = shuffle(eligibleColIdxs).slice(0, 1);
-
-  STATE.divisionAskedColIdxs = new Set(askedColIdxs);
-  STATE.hiddenCells = askedColIdxs.map(ci => ({ rowIdx: -1, colIdx: ci, answer: cols[ci] }));
-  STATE.lastHiddenKeys = new Set();
-  STATE.highlightRowIdx = STATE.divisionClueRowIdx;
-  STATE.highlightColIdx = askedColIdxs[0];
+  if (pick.mode === 'division') {
+    STATE.divisionClueRowIdx = pick.ri;
+    STATE.divisionAskedColIdxs = new Set([pick.ci]);
+    STATE.hiddenCells = [{ rowIdx: -1, colIdx: pick.ci, answer: pick.c }];
+  } else {
+    STATE.divisionClueRowIdx = null;
+    STATE.divisionAskedColIdxs = new Set();
+    STATE.hiddenCells = [{ rowIdx: pick.ri, colIdx: pick.ci, answer: pick.r * pick.c }];
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -393,8 +388,13 @@ function clearWrongInputs() {
 // ═══════════════════════════════════════════════════
 function incrementTaskCount() {
   STATE.tasksCompleted++;
+  // Mark this combination as completed
+  const grid = buildGrid();
+  const r = grid.rows[STATE.highlightRowIdx];
+  const c = grid.cols[STATE.highlightColIdx];
+  STATE.completedCombinations.add(`${STATE.roundMode}:${r}:${c}`);
   updateProgressDisplay();
-  if (STATE.goalType === 'tasks' && STATE.tasksCompleted >= STATE.goalValue) {
+  if (STATE.goalType === 'all' && STATE.completedCombinations.size >= STATE.totalCombinations) {
     setTimeout(endGame, 800);
   }
 }
@@ -403,9 +403,10 @@ function updateProgressDisplay() {
   const el = document.getElementById('progress-display');
   const bar = document.getElementById('progress-bar');
 
-  if (STATE.goalType === 'tasks') {
-    el.textContent = `${STATE.tasksCompleted} / ${STATE.goalValue}`;
-    bar.style.width = `${Math.min(100, (STATE.tasksCompleted / STATE.goalValue) * 100)}%`;
+  if (STATE.goalType === 'all') {
+    const done = STATE.completedCombinations.size;
+    el.textContent = `${done} / ${STATE.totalCombinations}`;
+    bar.style.width = `${Math.min(100, (done / STATE.totalCombinations) * 100)}%`;
   } else {
     el.textContent = formatTime(STATE.timerSeconds);
     const total = STATE.goalValue * 60;
@@ -446,7 +447,8 @@ function startGame() {
   STATE.tasksAttempted = 0;
   STATE.timerInterval = null;
   STATE.startTime = Date.now();
-  STATE.lastHiddenKeys = new Set();
+  STATE.completedCombinations = new Set();
+  STATE.totalCombinations = STATE.selectedNumbers.length ** 2 * STATE.modes.length;
 
   showScreen('game');
   updateProgressDisplay();
@@ -512,8 +514,7 @@ function initEvents() {
 
   document.querySelectorAll('input[name="goal-type"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      document.getElementById('goal-unit').textContent =
-        radio.value === 'tasks' ? 'tasks' : 'minutes';
+      document.getElementById('goal-time-input').classList.toggle('hidden', radio.value !== 'time');
     });
   });
 
