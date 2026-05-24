@@ -29,7 +29,50 @@ const STATE = {
   timerSeconds: 0,
   timerInterval: null,
   startTime: null,
+
+  // Error tracking
+  currentCombErrors: 0,   // wrong submissions for the current combination
+  sessionErrors: {},      // "mode:r:c" -> error count for completed combos this session
 };
+
+// ═══════════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════════
+const HISTORY_KEY = 'multiSquare_history';
+const SETTINGS_KEY = 'multiSquare_settings';
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+function saveHistory(sessions) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(sessions));
+}
+function clearHistory() { localStorage.removeItem(HISTORY_KEY); }
+function addSession(errorMap) {
+  if (Object.keys(errorMap).length === 0) return;
+  const sessions = loadHistory();
+  sessions.push({ ts: Date.now(), errors: errorMap });
+  saveHistory(sessions);
+}
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ modes: STATE.modes, difficulty: STATE.difficulty }));
+}
+function applyStoredSettings() {
+  const s = loadSettings();
+  if (Array.isArray(s.modes) && s.modes.length > 0) STATE.modes = s.modes;
+  if (s.difficulty) STATE.difficulty = s.difficulty;
+}
+
+// ═══════════════════════════════════════════════════
+// HISTORY VIEW STATE
+// ═══════════════════════════════════════════════════
+let histPeriod = 'session';
+let histMode = 'multiplication';
 
 // ═══════════════════════════════════════════════════
 // HELPERS
@@ -61,7 +104,7 @@ function elapsedSeconds() {
 // SCREEN TRANSITIONS
 // ═══════════════════════════════════════════════════
 function showScreen(name) {
-  ['config', 'game', 'end'].forEach(s => {
+  ['config', 'settings', 'game', 'end'].forEach(s => {
     document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
   });
   STATE.screen = name;
@@ -102,29 +145,18 @@ function setAllCheckboxes(checked) {
   });
 }
 
-function getSelectedDifficulty() {
-  return document.querySelector('.diff-btn.selected')?.dataset.diff || 'easy';
-}
-
-function getSelectedModes() {
-  return [...document.querySelectorAll('.mode-btn.selected')].map(b => b.dataset.mode);
-}
-
 function readConfig() {
   const nums = getCheckedNumbers();
   if (nums.length < 2) {
     showConfigError('Please select at least 2 numbers.');
     return false;
   }
-  const modes = getSelectedModes();
-  if (modes.length === 0) {
-    showConfigError('Please select at least one operation (Multiplication or Division).');
+  if (STATE.modes.length === 0) {
+    showConfigError('No operation selected. Open ⚙ Settings to choose an operation.');
     return false;
   }
   hideConfigError();
   STATE.selectedNumbers = nums;
-  STATE.difficulty = getSelectedDifficulty();
-  STATE.modes = modes;
   STATE.goalType = document.querySelector('input[name="goal-type"]:checked').value;
   STATE.goalValue = Math.max(1, parseInt(document.getElementById('goal-value').value) || 5);
   return true;
@@ -138,6 +170,25 @@ function showConfigError(msg) {
 
 function hideConfigError() {
   document.getElementById('config-error').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════
+// SETTINGS SCREEN
+// ═══════════════════════════════════════════════════
+function syncSettingsUI() {
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('selected', STATE.modes.includes(btn.dataset.mode));
+  });
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.diff === STATE.difficulty);
+  });
+}
+
+function readSettingsUI() {
+  const modes = [...document.querySelectorAll('.mode-btn.selected')].map(b => b.dataset.mode);
+  STATE.modes = modes.length > 0 ? modes : ['multiplication'];
+  STATE.difficulty = document.querySelector('.diff-btn.selected')?.dataset.diff || 'easy';
+  saveSettings();
 }
 
 // ═══════════════════════════════════════════════════
@@ -361,6 +412,7 @@ function submitAnswers() {
       if (STATE.screen === 'game') nextRound();
     }, 700);
   } else {
+    STATE.currentCombErrors++;
     setTimeout(() => clearWrongInputs(), 500);
   }
 }
@@ -398,7 +450,10 @@ function incrementTaskCount() {
   const grid = buildGrid();
   const r = grid.rows[STATE.highlightRowIdx];
   const c = grid.cols[STATE.highlightColIdx];
-  STATE.completedCombinations.add(`${STATE.roundMode}:${r}:${c}`);
+  const key = `${STATE.roundMode}:${r}:${c}`;
+  STATE.completedCombinations.add(key);
+  STATE.sessionErrors[key] = STATE.currentCombErrors;
+  STATE.currentCombErrors = 0;
   updateProgressDisplay();
   if (STATE.goalType === 'all' && STATE.completedCombinations.size >= STATE.totalCombinations) {
     setTimeout(endGame, 800);
@@ -455,6 +510,8 @@ function startGame() {
   STATE.startTime = Date.now();
   STATE.completedCombinations = new Set();
   STATE.totalCombinations = STATE.selectedNumbers.length ** 2 * STATE.modes.length;
+  STATE.sessionErrors = {};
+  STATE.currentCombErrors = 0;
 
   showScreen('game');
   updateProgressDisplay();
@@ -467,6 +524,7 @@ function startGame() {
 }
 
 function nextRound() {
+  STATE.currentCombErrors = 0;
   STATE.round++;
   const grid = buildGrid();
   selectHiddenCells(grid);
@@ -475,6 +533,7 @@ function nextRound() {
 
 function endGame() {
   stopTimer();
+  addSession(STATE.sessionErrors);
   showEndScreen();
 }
 
@@ -489,7 +548,100 @@ function showEndScreen() {
   document.getElementById('end-accuracy').textContent = accuracy + '%';
   document.getElementById('end-time').textContent = formatTime(elapsed);
 
+  // Reset period to 'session'; auto-pick mode based on what was played
+  histPeriod = 'session';
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector('.period-btn[data-period="session"]').classList.add('selected');
+
+  const playedModes = [...new Set(Object.keys(STATE.sessionErrors).map(k => k.split(':')[0]))];
+  histMode = playedModes.includes('multiplication') ? 'multiplication' : (playedModes[0] || 'multiplication');
+  document.querySelectorAll('.hist-mode-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.hist-mode-btn[data-mode="${histMode}"]`).classList.add('selected');
+
   showScreen('end');
+  renderHistoryGrid();
+}
+
+// ═══════════════════════════════════════════════════
+// HISTORY GRID
+// ═══════════════════════════════════════════════════
+function getErrorData() {
+  const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  if (histPeriod === 'session') {
+    const data = {};
+    all.forEach(r => all.forEach(c => {
+      const key = `${histMode}:${r}:${c}`;
+      if (key in STATE.sessionErrors) data[`${r}:${c}`] = { avg: STATE.sessionErrors[key] };
+    }));
+    return data;
+  }
+  const sessions = loadHistory();
+  let cutoff = 0;
+  const now = Date.now();
+  if (histPeriod === 'day')   cutoff = now - 24 * 60 * 60 * 1000;
+  if (histPeriod === 'week')  cutoff = now - 7  * 24 * 60 * 60 * 1000;
+  if (histPeriod === 'month') cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  const relevant = sessions.filter(s => s.ts >= cutoff);
+  const agg = {};
+  relevant.forEach(s => {
+    Object.entries(s.errors).forEach(([key, errCount]) => {
+      if (!key.startsWith(histMode + ':')) return;
+      const [, r, c] = key.split(':');
+      const cellKey = `${r}:${c}`;
+      if (!agg[cellKey]) agg[cellKey] = { total: 0, count: 0 };
+      agg[cellKey].total += errCount;
+      agg[cellKey].count++;
+    });
+  });
+  const data = {};
+  Object.entries(agg).forEach(([ck, v]) => { data[ck] = { avg: v.total / v.count }; });
+  return data;
+}
+
+function errorsToColor(avg) {
+  const ratio = Math.min(avg / 5, 1);
+  const hue = Math.round(120 * (1 - ratio));
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+function renderHistoryGrid() {
+  const data = getErrorData();
+  const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const table = document.getElementById('history-grid');
+  table.innerHTML = '';
+
+  const thead = table.createTHead();
+  const headerRow = thead.insertRow();
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = histMode === 'division' ? '÷' : '×';
+  headerRow.appendChild(cornerTh);
+  all.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c;
+    headerRow.appendChild(th);
+  });
+
+  const tbody = table.createTBody();
+  all.forEach(r => {
+    const tr = tbody.insertRow();
+    const rowTh = document.createElement('th');
+    rowTh.textContent = r;
+    tr.appendChild(rowTh);
+    all.forEach(c => {
+      const td = tr.insertCell();
+      const info = data[`${r}:${c}`];
+      if (info !== undefined) {
+        td.textContent = r * c;
+        td.style.backgroundColor = errorsToColor(info.avg);
+        td.classList.add('hist-cell-done');
+        td.title = histPeriod === 'session'
+          ? (info.avg === 0 ? `✓ First try!` : `${info.avg} wrong attempt${info.avg !== 1 ? 's' : ''}`)
+          : `avg ${info.avg.toFixed(1)} errors/session`;
+      } else {
+        td.classList.add('hist-cell-empty');
+      }
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════
@@ -500,24 +652,6 @@ function initEvents() {
   document.getElementById('btn-select-all').addEventListener('click', () => setAllCheckboxes(true));
   document.getElementById('btn-clear-all').addEventListener('click', () => setAllCheckboxes(false));
 
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const alreadySelected = btn.classList.contains('selected');
-      const otherSelected = [...document.querySelectorAll('.mode-btn')]
-        .some(b => b !== btn && b.classList.contains('selected'));
-      // Prevent deselecting the last active toggle
-      if (alreadySelected && !otherSelected) return;
-      btn.classList.toggle('selected');
-    });
-  });
-
-  document.querySelectorAll('.diff-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-    });
-  });
-
   document.querySelectorAll('input[name="goal-type"]').forEach(radio => {
     radio.addEventListener('change', () => {
       document.getElementById('goal-time-input').classList.toggle('hidden', radio.value !== 'time');
@@ -525,6 +659,43 @@ function initEvents() {
   });
 
   document.getElementById('btn-start').addEventListener('click', startGame);
+
+  // Settings
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    syncSettingsUI();
+    showScreen('settings');
+  });
+  document.getElementById('btn-settings-back').addEventListener('click', () => {
+    readSettingsUI();
+    showScreen('config');
+  });
+  // Mode toggles (settings) — prevent deselecting the last one
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const alreadySelected = btn.classList.contains('selected');
+      const otherSelected = [...document.querySelectorAll('.mode-btn')]
+        .some(b => b !== btn && b.classList.contains('selected'));
+      if (alreadySelected && !otherSelected) return;
+      btn.classList.toggle('selected');
+    });
+  });
+  // Difficulty toggles (settings)
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+  });
+  // Clear history
+  document.getElementById('btn-clear-history').addEventListener('click', () => {
+    if (confirm('Clear all history? This cannot be undone.')) {
+      clearHistory();
+      const btn = document.getElementById('btn-clear-history');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Cleared';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+  });
 
   // Game
   document.getElementById('btn-submit').addEventListener('click', submitAnswers);
@@ -537,12 +708,31 @@ function initEvents() {
 
   // End
   document.getElementById('btn-play-again').addEventListener('click', () => showScreen('config'));
+
+  // History period + mode toggles
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      histPeriod = btn.dataset.period;
+      renderHistoryGrid();
+    });
+  });
+  document.querySelectorAll('.hist-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.hist-mode-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      histMode = btn.dataset.mode;
+      renderHistoryGrid();
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  applyStoredSettings();
   initNumberCheckboxes();
   initEvents();
   showScreen('config');
