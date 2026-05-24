@@ -45,6 +45,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.1s, background 0.15s;
+  touch-action: manipulation;
 }
 .btn:active { transform: scale(0.96); }
 .btn-primary { background: var(--primary); color: white; }
@@ -490,15 +491,17 @@ body {
   background: none;
   border: 2px solid var(--border);
   border-radius: 50%;
-  width: 2.6rem;
-  height: 2.6rem;
-  font-size: 1.2rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  font-size: 1.3rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   transition: background 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
 }
 .btn-icon:hover { background: #eee; }
 
@@ -702,10 +705,19 @@ body {
   color: var(--muted);
 }
 
+/* ── Touch targets for all interactive controls ── */
+.mode-btn, .diff-btn, .period-btn, .hist-mode-btn, .num-checkbox-label {
+  touch-action: manipulation;
+}
+
 /* ── Responsive additions ── */
 @media (max-width: 600px) {
   #history-grid th,
   #history-grid td { min-width: 1.8rem; height: 1.9rem; font-size: 0.7rem; }
   .period-btn, .hist-mode-btn { padding: 0.3rem 0.55rem; font-size: 0.78rem; }
   #screen-settings { padding: 0.75rem; }
+
+  /* Shrink title so gear button always has room */
+  .config-title-row h1 { font-size: 1.5rem; }
+  .btn-icon { width: 3rem; height: 3rem; font-size: 1.4rem; }
 }
