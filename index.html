@@ -10,7 +10,10 @@
 
 <!-- ══════════════ CONFIG SCREEN ══════════════ -->
 <div id="screen-config">
-  <h1>✖ Multiplication Square</h1>
+  <div class="config-title-row">
+    <h1>✖ Multiplication Square</h1>
+    <button class="btn-icon" id="btn-settings">⚙️</button>
+  </div>
 
   <div class="config-card">
     <h2>Which numbers?</h2>
@@ -18,23 +21,6 @@
     <div class="checkbox-actions">
       <button class="btn btn-secondary btn-small" id="btn-select-all">Select all</button>
       <button class="btn btn-secondary btn-small" id="btn-clear-all">Clear all</button>
-    </div>
-  </div>
-
-  <div class="config-card">
-    <h2>Operation</h2>
-    <div id="mode-buttons">
-      <button class="mode-btn selected" data-mode="multiplication">Multiplication</button>
-      <button class="mode-btn selected" data-mode="division">Division</button>
-    </div>
-  </div>
-
-  <div class="config-card">
-    <h2>Difficulty</h2>
-    <div id="difficulty-buttons">
-      <button class="diff-btn selected" data-diff="easy">Easy</button>
-      <button class="diff-btn" data-diff="medium">Medium</button>
-      <button class="diff-btn" data-diff="hard">Hard</button>
     </div>
   </div>
 
@@ -56,6 +42,37 @@
 
   <span id="config-error" class="hidden"></span>
   <button class="btn btn-primary btn-lg" id="btn-start">Start Game ▶</button>
+</div>
+
+<!-- ══════════════ SETTINGS SCREEN ══════════════ -->
+<div id="screen-settings" class="hidden">
+  <div class="settings-header">
+    <button class="btn btn-secondary btn-small" id="btn-settings-back">←</button>
+    <h1>⚙ Settings</h1>
+  </div>
+
+  <div class="config-card">
+    <h2>Operation</h2>
+    <div id="mode-buttons">
+      <button class="mode-btn selected" data-mode="multiplication">Multiplication</button>
+      <button class="mode-btn selected" data-mode="division">Division</button>
+    </div>
+  </div>
+
+  <div class="config-card">
+    <h2>Difficulty</h2>
+    <div id="difficulty-buttons">
+      <button class="diff-btn selected" data-diff="easy">Easy</button>
+      <button class="diff-btn" data-diff="medium">Medium</button>
+      <button class="diff-btn" data-diff="hard">Hard</button>
+    </div>
+  </div>
+
+  <div class="config-card">
+    <h2>History</h2>
+    <p class="settings-hint">Your practice history is stored locally in this browser.</p>
+    <button class="btn btn-danger btn-small" id="btn-clear-history">🗑 Clear History</button>
+  </div>
 </div>
 
 <!-- ══════════════ GAME SCREEN ══════════════ -->
@@ -88,6 +105,36 @@
     <div class="score-row"><span>Total attempts</span><span class="score-val" id="end-attempts">—</span></div>
     <div class="score-row"><span>Accuracy</span><span class="score-val" id="end-accuracy">—</span></div>
     <div class="score-row"><span>Time spent</span><span class="score-val" id="end-time">—</span></div>
+  </div>
+  <div class="history-section">
+    <h2 class="history-title">Performance</h2>
+    <div class="history-controls">
+      <div class="period-toggles">
+        <button class="period-btn selected" data-period="session">This session</button>
+        <button class="period-btn" data-period="day">Today</button>
+        <button class="period-btn" data-period="week">Week</button>
+        <button class="period-btn" data-period="month">Month</button>
+        <button class="period-btn" data-period="all">All time</button>
+      </div>
+      <div class="mode-toggles">
+        <button class="hist-mode-btn selected" data-mode="multiplication">× Multiplication</button>
+        <button class="hist-mode-btn" data-mode="division">÷ Division</button>
+      </div>
+    </div>
+    <div id="history-grid-container">
+      <table id="history-grid"></table>
+    </div>
+    <div class="legend">
+      <div class="legend-bar-group">
+        <span class="legend-label">First try</span>
+        <div class="legend-bar"></div>
+        <span class="legend-label">5+ tries</span>
+      </div>
+      <div class="legend-unseen-group">
+        <div class="legend-unseen-swatch"></div>
+        <span class="legend-unseen-label">not attempted</span>
+      </div>
+    </div>
   </div>
   <button class="btn btn-primary btn-lg" id="btn-play-again">Play Again</button>
 </div>
